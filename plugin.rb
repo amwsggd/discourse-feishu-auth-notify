@@ -16,6 +16,8 @@ require_relative "lib/my_plugin_module/engine"
 
 after_initialize do
   require_dependency "plugins/feishu_auth_controller"
+  require_dependency "plugins/feishu_preferences_controller"
+
 
   on(:user_destroyed) do |user|
     ActiveRecord::Base.transaction do
@@ -27,5 +29,8 @@ after_initialize do
   Discourse::Application.routes.append do
     get "/feishu/login" => "plugins/feishu_auth#auth"
     get "/feishu/callback" => "plugins/feishu_auth#callback"
+
+    get "/feishu/notification-preference" => "plugins/feishu_preferences#show"
+    put "/feishu/notification-preference" => "plugins/feishu_preferences#update"
   end
 end
