@@ -238,67 +238,164 @@ after_initialize do
       "dc-n-#{delivery.notification_id}-u-#{delivery.discourse_user_id}"
     end
 
-    def render_notification_text(notification)
-      data = JSON.parse(notification.data.to_s) rescue {}
+  def render_notification_text(notification)
+    data = JSON.parse(notification.data.to_s) rescue {}
 
-      type =
-        begin
-          Notification.types.invert[notification.notification_type]&.to_s
-        rescue
-          nil
-        end
+    type =
+      begin
+        Notification.types.invert[notification.notification_type]&.to_s
+      rescue
+        nil
+      end
 
-      type ||= notification.notification_type.to_s
+    type ||= notification.notification_type.to_s
 
-      actor =
-        data["display_username"] ||
-        data["username"] ||
-        data["original_username"] ||
-        "有人"
+    actor =
+      data["display_username"] ||
+      data["username"] ||
+      data["original_username"] ||
+      "有人"
 
-      topic =
-        if notification.respond_to?(:topic)
-          notification.topic
-        else
-          Topic.find_by(id: notification.topic_id)
-        end
+    topic =
+      if notification.respond_to?(:topic)
+        notification.topic
+      else
+        Topic.find_by(id: notification.topic_id)
+      end
 
-      topic_title =
-        data["topic_title"] ||
-        topic&.title ||
-        "论坛通知"
+    topic_title =
+      data["topic_title"] ||
+      topic&.title ||
+      "论坛通知"
 
-      title =
-        case type
-        when "mentioned"
-          "#{actor} 在「#{topic_title}」中提到了你"
-        when "group_mentioned"
-          "#{actor} 在「#{topic_title}」中提到了你所在的群组"
-        when "replied"
-          "#{actor} 回复了你在「#{topic_title}」中的内容"
-        when "quoted"
-          "#{actor} 引用了你在「#{topic_title}」中的内容"
-        when "liked"
-          "#{actor} 点赞了你在「#{topic_title}」中的内容"
-        when "private_message"
-          "你收到一条新的论坛私信：「#{topic_title}」"
-        when "invited_to_private_message"
-          "你被邀请加入一条论坛私信：「#{topic_title}」"
-        when "bookmark_reminder"
-          "你有一个书签提醒：「#{topic_title}」"
-        else
-          "你在论坛有一条新通知：「#{topic_title}」"
-        end
+    title =
+      case type
+      when "mentioned"
+        "#{actor} 在「#{topic_title}」中提到了你"
+      when "group_mentioned"
+        "#{actor} 在「#{topic_title}」中提到了你所在的群组"
+      when "replied"
+        "#{actor} 回复了你在「#{topic_title}」中的内容"
+      when "quoted"
+        "#{actor} 引用了你在「#{topic_title}」中的内容"
+      when "liked"
+        "#{actor} 点赞了你在「#{topic_title}」中的内容"
+      when "private_message"
+        "你收到一条新的论坛私信：「#{topic_title}」"
+      when "invited_to_private_message"
+        "你被邀请加入一条论坛私信：「#{topic_title}」"
+      when "bookmark_reminder"
+        "你有一个书签提醒：「#{topic_title}」"
+      else
+        "你在论坛有一条新通知：「#{topic_title}」"
+      end
 
-      link = notification_link(notification, topic)
+    link = notification_link(notification, topic)
 
-      <<~TEXT.strip
-        #{title}
+    lines = []
+    lines << title
 
-        打开查看：
-        #{link}
-      TEXT
+    if include_post_excerpt_for_notification?(notification)
+      max_chars = SiteSetting.feishu_notify_excerpt_max_chars.to_i
+      excerpt = post_excerpt(notification_post(notification), max_chars: max_chars)
+
+      if excerpt.present?
+        lines << ""
+        lines << "内容："
+        lines << excerpt
+      end
     end
+
+    lines << ""
+    lines << "打开查看："
+    lines << link
+
+    lines.join("\n")
+  end
+
+  def include_post_excerpt_for_notification?(notification)
+    type =
+      begin
+        Notification.types.invert[notification.notification_type]&.to_s
+      rescue
+        nil
+      end
+
+    allowed_types = %w[
+      mentioned
+      group_mentioned
+      replied
+      quoted
+      liked
+      posted
+      watching_first_post
+    ]
+
+    return false unless allowed_types.include?(type)
+
+    topic =
+      if notification.respond_to?(:topic)
+        notification.topic
+      else
+        Topic.find_by(id: notification.topic_id)
+      end
+
+    # 私信默认带正文
+    # return false if topic&.private_message?
+
+    true
+  end
+
+  def notification_post(notification)
+    data = JSON.parse(notification.data.to_s) rescue {}
+
+    post_id =
+      data["post_id"] ||
+      data["original_post_id"] ||
+      data["original_post_id".to_sym]
+
+    if post_id.present?
+      post = Post.find_by(id: post_id)
+      return post if post.present?
+    end
+
+    topic_id =
+      notification.respond_to?(:topic_id) ? notification.topic_id : nil
+
+    topic_id ||= data["topic_id"]
+
+    post_number =
+      if notification.respond_to?(:post_number)
+        notification.post_number
+      end
+
+    post_number ||= data["post_number"]
+
+    if topic_id.present? && post_number.present?
+      return Post.find_by(topic_id: topic_id, post_number: post_number)
+    end
+
+    nil
+  end
+
+  def post_excerpt(post, max_chars: 400)
+    return nil if post.blank?
+    return nil if max_chars.to_i <= 0
+
+    text =
+      if post.cooked.present?
+        ActionView::Base.full_sanitizer.sanitize(post.cooked)
+      else
+        post.raw.to_s
+      end
+
+    text = text.gsub(/\s+/, " ").strip
+    return nil if text.blank?
+
+    max_chars = max_chars.to_i
+
+    text.length > max_chars ? "#{text[0, max_chars]}……" : text
+  end
 
     def notification_link(notification, topic)
       if topic.present?

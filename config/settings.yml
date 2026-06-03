@@ -32,3 +32,9 @@ plugins:
   feishu_admin_alert_chat_id:
     default: ""
     client: false
+
+  feishu_notify_excerpt_max_chars:
+    default: 400
+    min: 0
+    max: 1000
+    client: false
