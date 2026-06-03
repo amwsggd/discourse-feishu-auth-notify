@@ -15,9 +15,10 @@ end
 require_relative "lib/my_plugin_module/engine"
 
 after_initialize do
-  # 注册回调路由
+  require_dependency "plugins/feishu_auth_controller"
+
   Discourse::Application.routes.append do
-    get '/auth/feishu' => 'plugins/feishu_auth#auth'
-    get '/auth/feishu/callback' => 'plugins/feishu_auth#callback'
+    get "/auth/feishu" => "plugins/feishu_auth#auth"
+    get "/auth/feishu/callback" => "plugins/feishu_auth#callback"
   end
 end

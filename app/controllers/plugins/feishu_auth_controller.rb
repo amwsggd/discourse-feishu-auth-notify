@@ -1,6 +1,9 @@
 class Plugins::FeishuAuthController < ::ApplicationController
-  skip_before_action :check_xhr, raise: false
-  skip_before_action :verify_authenticity_token, raise: false
+  skip_before_action :redirect_to_login_if_required
+  skip_before_action :block_if_requires_login
+  skip_before_action :check_xhr
+  skip_before_action :preload_json
+  skip_before_action :verify_authenticity_token
 
   require 'net/http'
   require 'json'
