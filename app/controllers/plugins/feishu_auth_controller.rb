@@ -13,7 +13,18 @@ class Plugins::FeishuAuthController < ::ApplicationController
   FEISHU_USER_INFO_URL       = "https://open.feishu.cn/open-apis/authen/v1/user_info"
 
   def auth
-    redirect_to "#{FEISHU_OAUTH_AUTHORIZE_URL}?client_id=#{SiteSetting.feishu_login_app_id}&redirect_uri=#{CGI.escape(callback_url)}&response_type=code&scope=contact:user.base:readonly&state=#{SecureRandom.hex(10)}"
+    state = SecureRandom.hex(24)
+    session[:feishu_oauth_state] = state
+
+    query = {
+        client_id: SiteSetting.feishu_login_app_id,
+        redirect_uri: callback_url,
+        response_type: "code",
+        scope: "contact:user.base:readonly",
+        state: state
+    }.to_query
+
+    redirect_to "#{FEISHU_OAUTH_AUTHORIZE_URL}?#{query}", allow_other_host: true
   end
 
   def callback
@@ -99,6 +110,6 @@ class Plugins::FeishuAuthController < ::ApplicationController
   private
 
   def callback_url
-    "#{Discourse.base_url}/auth/feishu/callback"
+    "#{Discourse.base_url}/feishu/callback"
   end
 end
