@@ -1,0 +1,17 @@
+/* assets/stylesheets/common.scss */
+
+.btn-feishu {
+  background-color: #00b67a; // 飞书绿色
+  color: #fff;
+
+  &:hover {
+    background-color: darken(#00b67a, 5%);
+    color: #fff;
+  }
+
+  img {
+    height: 1em;
+    margin-right: 0.5em;
+    vertical-align: middle;
+  }
+}

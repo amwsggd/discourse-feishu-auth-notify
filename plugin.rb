@@ -34,8 +34,6 @@ after_initialize do
     put "/feishu/notification-preference" => "plugins/feishu_preferences#update"
   end
 
-
-
   class ::Jobs::FeishuPrepareNotificationDelivery < ::Jobs::Base
     def execute(args)
       return unless SiteSetting.feishu_integration_enabled
@@ -186,57 +184,37 @@ after_initialize do
 
     private
 
-    def mark_skipped!(delivery, code, message)
-      delivery.update!(
-        status: "skipped",
-        failed_at: nil,
-        next_retry_at: nil,
-        last_error_code: code,
-        last_error_message: message
-      )
+
+  def display_name_for_user(user)
+    return nil if user.blank?
+
+    user.name.presence || user.username
+  end
+
+  def notification_actor(notification)
+    post = notification_post(notification)
+
+    if post&.user
+      name = display_name_for_user(post.user)
+      return name if name.present?
     end
 
-    def handle_failure(delivery, error)
-      delivery.reload
+    data = JSON.parse(notification.data.to_s) rescue {}
 
-      code =
-        if error.respond_to?(:code)
-          error.code
-        else
-          error.class.name
-        end
+    # 不再优先用 display_username，因为它可能变成 "2 replies" 这种摘要文本
+    username =
+      data["original_username"] ||
+      data["username"]
 
-      message = error.message.to_s
+    if username.present?
+      user = User.find_by(username_lower: username.downcase)
+      return display_name_for_user(user) if user.present?
 
-      if error.respond_to?(:response_body) && error.response_body.present?
-        message = "#{message}; response=#{error.response_body.inspect}"
-      end
-
-      if delivery.attempt_count >= MAX_ATTEMPTS
-        delivery.update!(
-          status: "failed",
-          failed_at: Time.zone.now,
-          next_retry_at: nil,
-          last_error_code: code.to_s,
-          last_error_message: message[0, 2000]
-        )
-
-        Jobs.enqueue(:feishu_admin_alert, delivery_id: delivery.id)
-      else
-        delay = RETRY_DELAYS[[delivery.attempt_count - 1, 0].max] || 30.minutes
-
-        delivery.update!(
-          status: "retrying",
-          next_retry_at: Time.zone.now + delay,
-          last_error_code: code.to_s,
-          last_error_message: message[0, 2000]
-        )
-      end
+      return username
     end
 
-    def delivery_uuid(delivery)
-      "dc-n-#{delivery.notification_id}-u-#{delivery.discourse_user_id}"
-    end
+    "有人"
+  end
 
   def render_notification_text(notification)
     data = JSON.parse(notification.data.to_s) rescue {}
@@ -250,11 +228,7 @@ after_initialize do
 
     type ||= notification.notification_type.to_s
 
-    actor =
-      data["display_username"] ||
-      data["username"] ||
-      data["original_username"] ||
-      "有人"
+    actor = notification_actor(notification)
 
     topic =
       if notification.respond_to?(:topic)
@@ -311,6 +285,60 @@ after_initialize do
     lines << link
 
     lines.join("\n")
+  end
+
+
+    def mark_skipped!(delivery, code, message)
+      delivery.update!(
+        status: "skipped",
+        failed_at: nil,
+        next_retry_at: nil,
+        last_error_code: code,
+        last_error_message: message
+      )
+    end
+
+    def handle_failure(delivery, error)
+      delivery.reload
+
+      code =
+        if error.respond_to?(:code)
+          error.code
+        else
+          error.class.name
+        end
+
+      message = error.message.to_s
+
+      if error.respond_to?(:response_body) && error.response_body.present?
+        message = "#{message}; response=#{error.response_body.inspect}"
+      end
+
+      if delivery.attempt_count >= MAX_ATTEMPTS
+        delivery.update!(
+          status: "failed",
+          failed_at: Time.zone.now,
+          next_retry_at: nil,
+          last_error_code: code.to_s,
+          last_error_message: message[0, 2000]
+        )
+
+        Jobs.enqueue(:feishu_admin_alert, delivery_id: delivery.id)
+      else
+        delay = RETRY_DELAYS[[delivery.attempt_count - 1, 0].max] || 30.minutes
+
+        delivery.update!(
+          status: "retrying",
+          next_retry_at: Time.zone.now + delay,
+          last_error_code: code.to_s,
+          last_error_message: message[0, 2000]
+        )
+      end
+    end
+
+    def delivery_uuid(delivery)
+      "dc-n-#{delivery.notification_id}-u-#{delivery.discourse_user_id}"
+    end
   end
 
   def include_post_excerpt_for_notification?(notification)
@@ -397,22 +425,31 @@ after_initialize do
     text.length > max_chars ? "#{text[0, max_chars]}……" : text
   end
 
-    def notification_link(notification, topic)
+  def notification_link(notification, topic)
+    post = notification_post(notification)
+
+    if post.present?
+      topic ||= post.topic
+
       if topic.present?
-        post_number =
-          notification.respond_to?(:post_number) && notification.post_number.present? ?
-            notification.post_number :
-            1
+        return "#{Discourse.base_url}#{topic.relative_url}/#{post.post_number}"
+      end
+    end
 
-        "#{Discourse.base_url}#{topic.relative_url}/#{post_number}"
+    if topic.present?
+      post_number =
+        notification.respond_to?(:post_number) && notification.post_number.present? ?
+          notification.post_number :
+          1
+
+      "#{Discourse.base_url}#{topic.relative_url}/#{post_number}"
+    else
+      user = User.find_by(id: notification.user_id)
+
+      if user
+        "#{Discourse.base_url}/u/#{user.username}/notifications"
       else
-        user = User.find_by(id: notification.user_id)
-
-        if user
-          "#{Discourse.base_url}/u/#{user.username}/notifications"
-        else
-          Discourse.base_url
-        end
+        Discourse.base_url
       end
     end
   end
