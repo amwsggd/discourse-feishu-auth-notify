@@ -1,17 +1,15 @@
 # frozen_string_literal: true
 
-# name: discourse-plugin-name
-# about: TODO
-# meta_topic_id: TODO
+# name: discourse-feishu-auth-notify
+# about: Feishu OAuth login and Discourse notification delivery
 # version: 0.0.1
-# authors: Discourse
-# url: TODO
+# authors: local
 # required_version: 2.7.0
 
-enabled_site_setting :plugin_name_enabled
+enabled_site_setting :feishu_integration_enabled
 
 module ::MyPluginModule
-  PLUGIN_NAME = "discourse-plugin-name"
+  PLUGIN_NAME = "discourse-feishu-auth-notify"
 end
 
 require_relative "lib/my_plugin_module/engine"
