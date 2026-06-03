@@ -47,7 +47,7 @@ class Plugins::FeishuAuthController < ::ApplicationController
       "Content-Type" => "application/json"
     )
 
-    token_data = JSON.parse(token_resp.body)["data"]
+    token_data = JSON.parse(token_resp.body)
     user_access_token = token_data["access_token"]
 
     # 2. 获取用户信息
