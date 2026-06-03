@@ -193,6 +193,21 @@ after_initialize do
   end
 
   def notification_actor(notification)
+
+    data = JSON.parse(notification.data.to_s) rescue {}
+
+    type = Notification.types.invert[notification.notification_type]&.to_s
+
+    if type == "liked"
+      # actor 是点赞的人，不是被点赞的作者
+      liker_username = data["username"] || data["display_username"] || data["original_username"]
+      user = User.find_by(username_lower: liker_username&.downcase)
+      return display_name_for_user(user) if user.present?
+
+      return liker_username if liker_username.present?
+      return "有人"
+    end
+
     post = notification_post(notification)
 
     if post&.user
