@@ -13,6 +13,7 @@ module ::MyPluginModule
 end
 
 require_relative "lib/my_plugin_module/engine"
+require_relative "lib/discourse_feishu_auth_notify/feishu_api"
 
 after_initialize do
   require_dependency "plugins/feishu_auth_controller"
@@ -339,117 +340,118 @@ after_initialize do
     def delivery_uuid(delivery)
       "dc-n-#{delivery.notification_id}-u-#{delivery.discourse_user_id}"
     end
-  end
 
-  def include_post_excerpt_for_notification?(notification)
-    type =
-      begin
-        Notification.types.invert[notification.notification_type]&.to_s
-      rescue
-        nil
-      end
 
-    allowed_types = %w[
-      mentioned
-      group_mentioned
-      replied
-      quoted
-      liked
-      posted
-      watching_first_post
-    ]
+    def include_post_excerpt_for_notification?(notification)
+      type =
+        begin
+          Notification.types.invert[notification.notification_type]&.to_s
+        rescue
+          nil
+        end
 
-    return false unless allowed_types.include?(type)
+      allowed_types = %w[
+        mentioned
+        group_mentioned
+        replied
+        quoted
+        liked
+        posted
+        watching_first_post
+      ]
 
-    topic =
-      if notification.respond_to?(:topic)
-        notification.topic
-      else
-        Topic.find_by(id: notification.topic_id)
-      end
+      return false unless allowed_types.include?(type)
 
-    # 私信默认带正文
-    # return false if topic&.private_message?
+      topic =
+        if notification.respond_to?(:topic)
+          notification.topic
+        else
+          Topic.find_by(id: notification.topic_id)
+        end
 
-    true
-  end
+      # 私信默认带正文
+      # return false if topic&.private_message?
 
-  def notification_post(notification)
-    data = JSON.parse(notification.data.to_s) rescue {}
-
-    post_id =
-      data["post_id"] ||
-      data["original_post_id"] ||
-      data["original_post_id".to_sym]
-
-    if post_id.present?
-      post = Post.find_by(id: post_id)
-      return post if post.present?
+      true
     end
 
-    topic_id =
-      notification.respond_to?(:topic_id) ? notification.topic_id : nil
+    def notification_post(notification)
+      data = JSON.parse(notification.data.to_s) rescue {}
 
-    topic_id ||= data["topic_id"]
+      post_id =
+        data["post_id"] ||
+        data["original_post_id"] ||
+        data["original_post_id".to_sym]
 
-    post_number =
-      if notification.respond_to?(:post_number)
-        notification.post_number
+      if post_id.present?
+        post = Post.find_by(id: post_id)
+        return post if post.present?
       end
 
-    post_number ||= data["post_number"]
+      topic_id =
+        notification.respond_to?(:topic_id) ? notification.topic_id : nil
 
-    if topic_id.present? && post_number.present?
-      return Post.find_by(topic_id: topic_id, post_number: post_number)
+      topic_id ||= data["topic_id"]
+
+      post_number =
+        if notification.respond_to?(:post_number)
+          notification.post_number
+        end
+
+      post_number ||= data["post_number"]
+
+      if topic_id.present? && post_number.present?
+        return Post.find_by(topic_id: topic_id, post_number: post_number)
+      end
+
+      nil
     end
 
-    nil
-  end
+    def post_excerpt(post, max_chars: 400)
+      return nil if post.blank?
+      return nil if max_chars.to_i <= 0
 
-  def post_excerpt(post, max_chars: 400)
-    return nil if post.blank?
-    return nil if max_chars.to_i <= 0
+      text =
+        if post.cooked.present?
+          ActionView::Base.full_sanitizer.sanitize(post.cooked)
+        else
+          post.raw.to_s
+        end
 
-    text =
-      if post.cooked.present?
-        ActionView::Base.full_sanitizer.sanitize(post.cooked)
-      else
-        post.raw.to_s
+      text = text.gsub(/\s+/, " ").strip
+      return nil if text.blank?
+
+      max_chars = max_chars.to_i
+
+      text.length > max_chars ? "#{text[0, max_chars]}……" : text
+    end
+
+    def notification_link(notification, topic)
+      post = notification_post(notification)
+
+      if post.present?
+        topic ||= post.topic
+
+        if topic.present?
+          return "#{Discourse.base_url}#{topic.relative_url}/#{post.post_number}"
+        end
       end
-
-    text = text.gsub(/\s+/, " ").strip
-    return nil if text.blank?
-
-    max_chars = max_chars.to_i
-
-    text.length > max_chars ? "#{text[0, max_chars]}……" : text
-  end
-
-  def notification_link(notification, topic)
-    post = notification_post(notification)
-
-    if post.present?
-      topic ||= post.topic
 
       if topic.present?
-        return "#{Discourse.base_url}#{topic.relative_url}/#{post.post_number}"
-      end
-    end
+        post_number =
+          notification.respond_to?(:post_number) && notification.post_number.present? ?
+            notification.post_number :
+            1
 
-    if topic.present?
-      post_number =
-        notification.respond_to?(:post_number) && notification.post_number.present? ?
-          notification.post_number :
-          1
-
-      "#{Discourse.base_url}#{topic.relative_url}/#{post_number}"
-    else
-      user = User.find_by(id: notification.user_id)
-
-      if user
-        "#{Discourse.base_url}/u/#{user.username}/notifications"
+        "#{Discourse.base_url}#{topic.relative_url}/#{post_number}"
       else
-        Discourse.base_url
+        user = User.find_by(id: notification.user_id)
+
+        if user
+          "#{Discourse.base_url}/u/#{user.username}/notifications"
+        else
+          Discourse.base_url
+        end
       end
     end
   end

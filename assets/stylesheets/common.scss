@@ -1,17 +1,32 @@
-/* assets/stylesheets/common.scss */
+.feishu-login-button-wrapper {
+  margin-top: 0.5em;
+}
 
 .btn-feishu {
-  background-color: #00b67a; // 飞书绿色
-  color: #fff;
+  width: 100%;
+  justify-content: center;
+  gap: 0.5em;
+  background-color: #00b67a;
+  color: #000;
 
-  &:hover {
-    background-color: darken(#00b67a, 5%);
+  &:hover,
+  &:focus {
+    background-color: #00a36d;
     color: #fff;
   }
+}
 
-  img {
-    height: 1em;
-    margin-right: 0.5em;
-    vertical-align: middle;
-  }
+.feishu-login-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6em;
+  height: 1.6em;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  font-weight: 700;
+}
+
+.feishu-login-text {
+  line-height: 1;
 }
