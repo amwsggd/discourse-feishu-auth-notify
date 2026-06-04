@@ -277,6 +277,8 @@ after_initialize do
         "你被邀请加入一条论坛私信：「#{topic_title}」"
       when "bookmark_reminder"
         "你有一个书签提醒：「#{topic_title}」"
+      when "watching_category_or_tag", "watching_first_post"
+        "你的关注有你新内容：「#{topic_title}」"
       else
         "你在论坛有一条新通知：「#{topic_title}」"
       end
@@ -374,6 +376,7 @@ after_initialize do
         liked
         posted
         watching_first_post
+        watching_category_or_tag
       ]
 
       return false unless allowed_types.include?(type)
