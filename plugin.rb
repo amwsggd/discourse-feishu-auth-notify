@@ -30,6 +30,7 @@ after_initialize do
   Discourse::Application.routes.append do
     get "/feishu/login" => "plugins/feishu_auth#auth"
     get "/feishu/callback" => "plugins/feishu_auth#callback"
+    get "/feishu/complete" => "plugins/feishu_auth#complete"
 
     get "/feishu/notification-preference" => "plugins/feishu_preferences#show"
     put "/feishu/notification-preference" => "plugins/feishu_preferences#update"

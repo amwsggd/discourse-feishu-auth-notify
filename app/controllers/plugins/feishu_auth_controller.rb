@@ -124,6 +124,34 @@ class Plugins::FeishuAuthController < ::ApplicationController
     end
 
     # 5. 登录用户
+    ticket = SecureRandom.urlsafe_base64(32)
+
+    # 存 5 分钟有效
+    Discourse.cache.write("feishu_login_ticket:#{ticket}", user.id, expires_in: 5.minutes)
+
+    redirect_to "#{Discourse.base_url}/feishu/complete?ticket=#{CGI.escape(ticket)}", allow_other_host: true
+  end
+
+  def complete
+    # complete 方法（discourse.test.xxx.cn）
+    ticket = params[:ticket].to_s
+    user_id = Discourse.cache.read("feishu_login_ticket:#{ticket}")
+
+    # 用完立即删除
+    Discourse.cache.delete("feishu_login_ticket:#{ticket}")
+
+    if user_id.blank?
+      render plain: "Invalid or expired login ticket", status: 403
+      return
+    end
+
+    user = User.find_by(id: user_id)
+    if user.blank?
+      render plain: "User not found", status: 404
+      return
+    end
+
+    # 在真实站点域名下写 cookie
     log_on_user(user)
     redirect_to "/"
   end
