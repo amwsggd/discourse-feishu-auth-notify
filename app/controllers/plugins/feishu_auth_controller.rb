@@ -216,6 +216,6 @@ class Plugins::FeishuAuthController < ::ApplicationController
         raise "Failed to create unique username for Feishu user"
     end
   def callback_url
-    "#{Discourse.base_url}/feishu/callback"
+    "#{SiteSetting.feishu_auth_callback_url}/feishu/callback"
   end
 end

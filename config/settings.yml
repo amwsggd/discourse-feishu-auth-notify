@@ -38,3 +38,6 @@ plugins:
     min: 0
     max: 1000
     client: false
+  feishu_auth_callback_url:
+    default: ""
+    client: false
